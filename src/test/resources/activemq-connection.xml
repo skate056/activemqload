@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans     http://www.springframework.org/schema/beans/spring-beans.xsd
+        http://camel.apache.org/schema/spring           http://camel.apache.org/schema/spring/camel-spring.xsd"
+        >
+
+
+    <bean id="transactionManager" class="org.springframework.jms.connection.JmsTransactionManager">
+        <constructor-arg name="connectionFactory" ref="jmsConnectionFactory"/>
+    </bean>
+
+    <bean id="jmsConnectionFactory" class="org.springframework.jms.connection.CachingConnectionFactory">
+        <property name="targetConnectionFactory" ref="activeMQConnectionFactory"/>
+        <property name="sessionCacheSize" value="1"/>
+    </bean>
+
+    <bean id="eventActivemqConfiguration" class="org.apache.camel.component.jms.JmsConfiguration">
+        <property name="connectionFactory" ref="jmsConnectionFactory"/>
+        <property name="concurrentConsumers" value="30"/>
+    </bean>
+
+    <bean id="eventActivemq" class="org.apache.activemq.camel.component.ActiveMQComponent">
+        <property name="configuration">
+            <bean class="org.apache.camel.component.jms.JmsConfiguration">
+                <property name="connectionFactory" ref="jmsConnectionFactory"/>
+                <property name="concurrentConsumers" value="30"/>
+                <property name="transacted" value="true" />
+                <property name="transactionManager" ref="transactionManager" />
+                <property name="cacheLevelName" value="CACHE_NONE" />
+            </bean>
+        </property>
+    </bean>
+
+    <bean id="activeMQConnectionFactory" class="org.apache.activemq.ActiveMQConnectionFactory">
+        <property name="brokerURL" value="failover:(tcp://localhost:61616)?maxReconnectDelay=120000"/>
+        <property name="useCompression" value="false"/>
+        <!--
+                <property name="redeliveryPolicy" ref="redeliveryPolicy"/>
+        -->
+        <property name="prefetchPolicy">
+            <bean class="org.apache.activemq.ActiveMQPrefetchPolicy">
+                <property name="all" value="100"/>
+            </bean>
+        </property>
+    </bean>
+
+
+    <bean id="myTestMessageHandler" class="org.apache.activemq.MessageHandler"/>
+
+    <camelContext id="eventActionsContext" xmlns="http://camel.apache.org/schema/spring" managementNamePattern="eventActionsContext22" useMDCLogging="true" useBreadcrumb="true">
+
+
+        <endpoint id="eventLoadConsumerEndpoint" uri="eventActivemq:queue:eventLoadTest"/>
+
+        <route id="eventLoadTestRoute">
+            <from uri="ref:eventLoadConsumerEndpoint"/>
+            <transacted/>
+            <log message="Received events from queue for processing"/>
+            <to uri="bean:myTestMessageHandler?method=handleMessage" pattern="InOnly"/>
+        </route>
+
+    </camelContext>
+
+
+</beans>
